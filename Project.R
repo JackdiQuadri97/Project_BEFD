@@ -6,11 +6,12 @@ library(lmtest)
 library(forecast)
 library(DIMORA)
 library(fpp2)
+library(plotly)
 
 ####function to get ggm catching errors####
 errorggm <- function(x){
   result <- tryCatch({
-    return(GGM(dati, display = F))
+    return(GGM(x, display = F))
   }, error = function(e){
     return(NA)
   })
@@ -42,11 +43,17 @@ for (num in nums){
 }
 data <- data_raw %>% filter(Month!="Last 30 Days")
 
+#assigning labels, 0 -> gaas, 1 -> mixed, 2 -> sale
+lab <- as.factor(c(1,0,1,0,1,1,1,1,0,2,0,0,0,2,2,0,2,1,1,2,1,2,1,2,0,0,2,1,2,1,
+                   1,0,1,1,2,0,2,1,1,0,1,2,2,0,1,2,2,2,2,0,2,1,0,0,2,1,2,2,0,2,
+                   1,2,0,2,2,1,2,2,2,2,2,2,2,0,1,2,2,2,2,1,2,0,1,1,2,0,1,1,1,2,
+                   2,1,2,2,2,2,2,2,2,2,0,2,2,2,0,0,1,1,2,0,2,2,2,2,2,2,2,1,2,2,
+                   2))
 ####exploratory####
 data
 str(data)
 
-title = "Dota 2"
+title = "FIFA 22"
 dati = rev(data[title][[1]][!is.na(data[title][[1]])])
 dati
 length(dati)
@@ -63,10 +70,26 @@ plot(cumsum(dati), xlab="Year",ylab = "Average Players", pch=16, lty=3, xaxt ="n
 axis(1, at=listjan, labels=months[januarytf])
 
 bm_data<-BM(dati,display = T)
-summary(BM(dati,display = T))
+summary(bm_data)
+
+gbm_data_1<-GBM(dati,shock="exp", nshock=1,
+              prelimestimates=c(bm_data$coefficients,
+                                1,-0.1,0.1),
+              display=T)
+summary(gbm_data_1)
+
+gbm_data_2<-GBM(dati,shock="rett", nshock=1,
+                prelimestimates=c(bm_data$coefficients,
+                                  1,13,1),
+                display=T)
+summary(gbm_data_2)
+
+
 
 ggm_data<-GGM(dati,display = T)
-summary(GGM(dati,display = T))
+summary(GGM(dati,display = F))
+coefficients(GGM(dati,display = F))
+
 
 colnames(data)
 
@@ -90,7 +113,10 @@ ggm_data<-GGM(dati,display = T)
 ####coefficients####
 
 coeffs <- tibble(
-  coeff= c("m","p","q","K","pc","qc","ps","qs")
+  coeff = c("m","p","q","K","pc","qc","ps","qs")
+)
+pvals <- tibble(
+  coeff = c("m","p","q","K","pc","qc","ps","qs")
 )
 
 for (title in colnames(data)[-1]){
@@ -101,21 +127,101 @@ for (title in colnames(data)[-1]){
   
   bm_data<-BM(dati,display = F)
   ggm_data <- errorggm(dati)
-  if (is.na(ggm_data)){
+  if (length(ggm_data)==1){
     coeffs[title] <- c(bm_data$coefficients,rep(NA,5))
+    pvals[title] <- c(bm_data$Estimate$`p-value`,rep(NA,5))
   }
   else{
     coeffs[title] <- c(bm_data$coefficients,ggm_data$coefficients)
+    pvals[title] <- c(bm_data$Estimate$`p-value`,ggm_data$Estimate$`p-value`)
   }
 }
 
 coeffs
+pvals
 colnames(coeffs)
+
+
 
 unlist(coeffs[2,-1])
 unlist(coeffs[3,-1])
 
-plot(x = unlist(coeffs[2,-1]), y = unlist(coeffs[3,-1]), pch=16, lty=3, cex=0.6)
+plot_ly(x = unlist(coeffs[2,-1]), y = unlist(coeffs[3,-1]), color = lab,
+        type = "scatter", text = colnames(coeffs)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "P"),
+                      yaxis = list(title = "Q")))
+
+
+
 pairs(coeffs)
 
 pairs(t(coeffs[,colSums(is.na(coeffs))==0][-1]),labels = coeffs$coeff)
+
+for (num in nums){
+  print(num)
+}
+
+#### 3d plots coeffs####
+plot_ly(x = unlist(coeffs[2,-1]), y = unlist(coeffs[3,-1]),
+        z = log(unlist(coeffs[1,-1])), color = lab, type = "scatter3d",
+        text = colnames(coeffs)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "P"),
+                      yaxis = list(title = "Q"),
+                      zaxis = list(title = "log(M)"),
+                      aspectmode = "cube"))
+
+plot_ly(y = unlist(coeffs[2,-1]), x = lab, type = "box",
+        text = colnames(coeffs)[-1]) %>%
+  layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
+plot_ly(y = log(unlist(coeffs[2,-1])), x = lab, type = "box",
+        text = colnames(coeffs)[-1]) %>%
+  layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
+plot_ly(y = unlist(coeffs[3,-1]), x = lab, type = "box",
+        text = colnames(coeffs)[-1]) %>%
+  layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
+plot_ly(y = unlist(coeffs[1,-1]), x = lab, type = "box",
+        text = colnames(coeffs)[-1]) %>%
+  layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
+plot_ly(y = log(unlist(coeffs[1,-1])), x = lab, type = "box",
+        text = colnames(coeffs)[-1]) %>%
+  layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
+
+
+#### 3d plots pvals####
+plot_ly(x = unlist(pvals[2,-1]), y = unlist(pvals[3,-1]),
+        z = unlist(pvals[1,-1]), color = lab, type = "scatter3d",
+        text = colnames(pvals)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "P"),
+                      yaxis = list(title = "Q"),
+                      zaxis = list(title = "M"),
+                      aspectmode = "cube"))
+
+plot_ly(y = unlist(pvals[2,-1]), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
+plot_ly(y = log(unlist(pvals[2,-1])), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
+plot_ly(y = unlist(pvals[3,-1]), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
+plot_ly(y = log(unlist(pvals[3,-1])), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "log(Q)"), xaxis = list(title = "Groups"))
+plot_ly(y = unlist(pvals[1,-1]), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
+plot_ly(y = log(unlist(pvals[1,-1])), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
+
+plot_ly(y = log(unlist(pvals[1,-1])), x = lab, type = "box",
+        text = colnames(pvals)[-1]) %>%
+  layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
+
+
+#### table type vs. na_ggm####
+addmargins(table(lab,is.na(unlist(pvals[4,-1]))))
