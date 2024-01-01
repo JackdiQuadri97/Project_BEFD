@@ -7,6 +7,8 @@ library(forecast)
 library(DIMORA)
 library(fpp2)
 library(plotly)
+library(MASS)
+library(nnet)
 
 ####function to get ggm catching errors####
 errorggm <- function(x){
@@ -16,6 +18,27 @@ errorggm <- function(x){
     return(NA)
   })
   return(result)
+}
+errorexp <- function(x,x_bm_data,display=F){
+  result <- tryCatch({
+    return(GBM(x,shock="exp", nshock=1,prelimestimates=c(x_bm_data$coefficients,1,-0.1,0.1),display=display))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+errorrett <- function(x,x_bm_data,display=F){
+  result <- tryCatch({
+    return(GBM(x,shock="rett", nshock=1,prelimestimates=c(x_bm_data$coefficients,1,13,1),display=display))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+
+#function to normalize
+normalize_z_score <- function(x) {
+  (x - mean(x)) / sd(x)
 }
 
 ####scraping####
@@ -53,7 +76,7 @@ lab <- as.factor(c(1,0,1,0,1,1,1,1,0,2,0,0,0,2,2,0,2,1,1,2,1,2,1,2,0,0,2,1,2,1,
 data
 str(data)
 
-title = "FIFA 22"
+title = "Counter-Strike 2"
 dati = rev(data[title][[1]][!is.na(data[title][[1]])])
 dati
 length(dati)
@@ -93,8 +116,8 @@ coefficients(GGM(dati,display = F))
 
 colnames(data)
 
-####debug check single ggm####
-z = 80
+####debug check single bm bgm ggm####
+z = 76
 
 z=z+1
 title = colnames(data)[z]
@@ -107,17 +130,48 @@ listjan = which(januarytf)
 plot(dati, xlab="Year",ylab = "Average Players", pch=16, lty=3, xaxt ="n", cex=0.6)
 axis(1, at=listjan, labels=months[januarytf])
 bm_data<-BM(dati,display = T)
+exp_data<-errorexp(dati,bm_data, display = T)
+rett_data<-errorrett(dati,bm_data, display = T)
 ggm_data<-GGM(dati,display = T)
 
 
+summary(bm_data)
+summary(exp_data)
+summary(rett_data)
+summary(ggm_data)
+
 ####coefficients####
 
-coeffs <- tibble(
-  coeff = c("m","p","q","K","pc","qc","ps","qs")
+Rsq_bm = c()
+Rsq_exp = c()
+Rsq_rett = c()
+Rsq_ggm = c()
+coeffs_bm <- tibble(
+  coeff = c("m","p","q")
 )
-pvals <- tibble(
-  coeff = c("m","p","q","K","pc","qc","ps","qs")
+coeffs_exp <- tibble(
+  coeff = c("m_exp","p_exp","q_exp","a1_exp","b1_exp","c1_exp")
 )
+coeffs_rett <- tibble(
+  coeff = c("m_rett","p_rett","q_rett","a1_rett","b1_rett","c1_rett")
+)
+coeffs_ggm <- tibble(
+  coeff = c("K","pc","qc","ps","qs")
+)
+
+pvals_bm <- tibble(
+  coeff = c("m","p","q")
+)
+pvals_exp <- tibble(
+  coeff = c("m_exp","p_exp","q_exp","a1_exp","b1_exp","c1_exp")
+)
+pvals_rett <- tibble(
+  coeff = c("m_rett","p_rett","q_rett","a1_rett","b1_rett","c1_rett")
+)
+pvals_ggm <- tibble(
+  coeff = c("K","pc","qc","ps","qs")
+)
+
 
 for (title in colnames(data)[-1]){
   dati = rev(data[title][[1]][!is.na(data[title][[1]])])
@@ -127,101 +181,291 @@ for (title in colnames(data)[-1]){
   
   bm_data<-BM(dati,display = F)
   ggm_data <- errorggm(dati)
-  if (length(ggm_data)==1){
-    coeffs[title] <- c(bm_data$coefficients,rep(NA,5))
-    pvals[title] <- c(bm_data$Estimate$`p-value`,rep(NA,5))
+  gbm_data_exp<-errorexp(dati,bm_data)
+  gbm_data_rett<-errorrett(dati,bm_data)
+  coeffs_bm[title] <- bm_data$coefficients
+  pvals_bm[title] <- bm_data$Estimate$`p-value`
+  Rsq_bm = c(Rsq_bm,bm_data$Rsquared)
+  if (length(gbm_data_exp)==1){
+    coeffs_exp[title] <- rep(NA,6)
+    pvals_exp[title] <- rep(NA,6)
+    Rsq_exp = c(Rsq_exp,NA)
   }
   else{
-    coeffs[title] <- c(bm_data$coefficients,ggm_data$coefficients)
-    pvals[title] <- c(bm_data$Estimate$`p-value`,ggm_data$Estimate$`p-value`)
+    coeffs_exp[title] <- gbm_data_exp$coefficients
+    pvals_exp[title] <- gbm_data_exp$Estimate$`p-value`
+    Rsq_exp = c(Rsq_exp,gbm_data_exp$Rsquared)
+  }
+  if (length(gbm_data_rett)==1){
+    coeffs_rett[title] <- rep(NA,6)
+    pvals_rett[title] <- rep(NA,6)
+    Rsq_rett = c(Rsq_rett,NA)
+  }
+  else{
+    coeffs_rett[title] <- gbm_data_rett$coefficients
+    pvals_rett[title] <- gbm_data_rett$Estimate$`p-value`
+    Rsq_rett = c(Rsq_rett,gbm_data_rett$Rsquared)
+  }
+  if (length(ggm_data)==1){
+    coeffs_ggm[title] <- rep(NA,5)
+    pvals_ggm[title] <- rep(NA,5)
+    Rsq_ggm = c(Rsq_ggm,NA)
+  }
+  else{
+    coeffs_ggm[title] <- ggm_data$coefficients
+    pvals_ggm[title] <- ggm_data$Estimate$`p-value`
+    Rsq_ggm = c(Rsq_ggm,ggm_data$Rsquared)
   }
 }
 
-coeffs
-pvals
-colnames(coeffs)
+Rsq_bm
+Rsq_exp
+Rsq_rett
+Rsq_ggm
+coeffs_bm
+coeffs_exp
+coeffs_rett
+coeffs_ggm
+pvals_bm
+pvals_exp
+pvals_rett
+pvals_ggm
+
+colnames(coeffs_bm)[-1]
+
+Rsq_exp_bm <- na.fill((1-Rsq_bm)/(1-Rsq_exp),1)
+Rsq_rett_bm <- na.fill((1-Rsq_bm)/(1-Rsq_rett),1)
+Rsq_ggm_bm <- na.fill((1-Rsq_bm)/(1-Rsq_ggm),1)
+
+plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, z = Rsq_ggm_bm, color = lab,
+        type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "exp"),
+                      yaxis = list(title = "rett"),
+                      zaxis = list(title = "ggm")))
+plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), z = log(Rsq_ggm_bm), color = lab,
+        type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "log(exp)"),
+                      yaxis = list(title = "log(rett)"),
+                      zaxis = list(title = "log(ggm)")))
+
+plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), color = lab,
+        type = "scatter", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "log(exp)"),
+                      yaxis = list(title = "log(rett)")))
 
 
+unlist(coeffs_bm[2,-1])
+unlist(coeffs_bm[3,-1])
 
-unlist(coeffs[2,-1])
-unlist(coeffs[3,-1])
-
-plot_ly(x = unlist(coeffs[2,-1]), y = unlist(coeffs[3,-1]), color = lab,
-        type = "scatter", text = colnames(coeffs)[-1], mode = "markers",
+plot_ly(x = unlist(coeffs_bm[2,-1]), y = unlist(coeffs_bm[3,-1]), color = lab,
+        type = "scatter", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "P"),
                       yaxis = list(title = "Q")))
 
 
+pairs(t(coeffs_bm[,colSums(is.na(coeffs_bm))==0][-1]),labels = coeffs_bm$coeff)
 
-pairs(coeffs)
 
-pairs(t(coeffs[,colSums(is.na(coeffs))==0][-1]),labels = coeffs$coeff)
-
-for (num in nums){
-  print(num)
-}
-
-#### 3d plots coeffs####
-plot_ly(x = unlist(coeffs[2,-1]), y = unlist(coeffs[3,-1]),
-        z = log(unlist(coeffs[1,-1])), color = lab, type = "scatter3d",
-        text = colnames(coeffs)[-1], mode = "markers",
+#### 3d plots coeffs_bm####
+plot_ly(x = unlist(coeffs_bm[2,-1]), y = unlist(coeffs_bm[3,-1]),
+        z = log(unlist(coeffs_bm[1,-1])), color = lab, type = "scatter3d",
+        text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "P"),
                       yaxis = list(title = "Q"),
                       zaxis = list(title = "log(M)"),
                       aspectmode = "cube"))
 
-plot_ly(y = unlist(coeffs[2,-1]), x = lab, type = "box",
-        text = colnames(coeffs)[-1]) %>%
+plot_ly(y = unlist(coeffs_bm[2,-1]), x = lab, type = "box",
+        text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
-plot_ly(y = log(unlist(coeffs[2,-1])), x = lab, type = "box",
-        text = colnames(coeffs)[-1]) %>%
+plot_ly(y = log(unlist(coeffs_bm[2,-1])), x = lab, type = "box",
+        text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
-plot_ly(y = unlist(coeffs[3,-1]), x = lab, type = "box",
-        text = colnames(coeffs)[-1]) %>%
+plot_ly(y = unlist(coeffs_bm[3,-1]), x = lab, type = "box",
+        text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
-plot_ly(y = unlist(coeffs[1,-1]), x = lab, type = "box",
-        text = colnames(coeffs)[-1]) %>%
+plot_ly(y = unlist(coeffs_bm[1,-1]), x = lab, type = "box",
+        text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
-plot_ly(y = log(unlist(coeffs[1,-1])), x = lab, type = "box",
-        text = colnames(coeffs)[-1]) %>%
+plot_ly(y = log(unlist(coeffs_bm[1,-1])), x = lab, type = "box",
+        text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
 
 
-#### 3d plots pvals####
-plot_ly(x = unlist(pvals[2,-1]), y = unlist(pvals[3,-1]),
-        z = unlist(pvals[1,-1]), color = lab, type = "scatter3d",
-        text = colnames(pvals)[-1], mode = "markers",
+#### 3d plots pvals_bm####
+plot_ly(x = unlist(pvals_bm[2,-1]), y = unlist(pvals_bm[3,-1]),
+        z = unlist(pvals_bm[1,-1]), color = lab, type = "scatter3d",
+        text = colnames(pvals_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "P"),
                       yaxis = list(title = "Q"),
                       zaxis = list(title = "M"),
                       aspectmode = "cube"))
 
-plot_ly(y = unlist(pvals[2,-1]), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = unlist(pvals_bm[2,-1]), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
-plot_ly(y = log(unlist(pvals[2,-1])), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = log(unlist(pvals_bm[2,-1])), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
-plot_ly(y = unlist(pvals[3,-1]), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = unlist(pvals_bm[3,-1]), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
-plot_ly(y = log(unlist(pvals[3,-1])), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = log(unlist(pvals_bm[3,-1])), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(Q)"), xaxis = list(title = "Groups"))
-plot_ly(y = unlist(pvals[1,-1]), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = unlist(pvals_bm[1,-1]), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
-plot_ly(y = log(unlist(pvals[1,-1])), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = log(unlist(pvals_bm[1,-1])), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
 
-plot_ly(y = log(unlist(pvals[1,-1])), x = lab, type = "box",
-        text = colnames(pvals)[-1]) %>%
+plot_ly(y = log(unlist(pvals_bm[1,-1])), x = lab, type = "box",
+        text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
 
 
 #### table type vs. na_ggm####
-addmargins(table(lab,is.na(unlist(pvals[4,-1]))))
+addmargins(table(lab,is.na(unlist(pvals_ggm[1,-1]))))
+
+
+#### modelling ####
+labnum <- (as.numeric(lab)-1)/2
+
+var1 <- normalize_z_score(log(unlist(coeffs_bm[1,-1])))
+var2 <- normalize_z_score(unlist(coeffs_bm[2,-1]))
+var3 <- normalize_z_score(unlist(coeffs_bm[3,-1]))
+
+naexp <- is.na(unlist(pvals_exp[1,-1]))
+narett<- is.na(unlist(pvals_rett[1,-1]))
+naggm <- is.na(unlist(pvals_ggm[1,-1]))
+
+modeldata <- data.frame(
+  lab = lab,
+  m = var1,
+  p = var2,
+  q = var3,
+  Rsq_exp_bm = Rsq_exp_bm,
+  Rsq_rett_bm = Rsq_rett_bm,
+  Rsq_ggm_bm = Rsq_ggm_bm,
+  naexp = naexp,
+  narett = narett,
+  naggm = naggm
+)
+
+ord_model <- polr(lab ~ ., data = modeldata, Hess = TRUE)
+mult_model <- multinom(lab ~ ., data = modeldata, Hess = TRUE)
+logit_model <- glm(labnum ~ var1 + var2 + var3 + Rsq_exp_bm + Rsq_rett_bm + Rsq_ggm_bm + naexp + narett + naggm, family = binomial(link = "logit"))
+
+summary(ord_model)
+summary(mult_model)
+summary(logit_model)
+
+predicted_values_ord <- predict(ord_model, newdata = modeldata[-1], type = "class")
+predicted_values_ord
+
+predicted_values_mult <- predict(mult_model, newdata = modeldata[-1], type = "class")
+predicted_values_mult
+
+predicted_values_logit <- predict(logit_model, newdata = modeldata[-1], type = "response")
+predicted_values_logit
+
+sum(lab == predicted_values_ord) / length(lab)
+sum(lab == predicted_values_mult) / length(lab)
+
+
+table(lab,predicted_values_ord)
+table(lab,predicted_values_mult)
+
+precision <- function(actual, predicted, positive_label) {
+  tp <- sum(predicted == positive_label & actual == positive_label)
+  fp <- sum(predicted == positive_label & actual != positive_label)
+  if (tp + fp == 0) {
+    return(0)  # Handling division by zero
+  } else {
+    return(tp / (tp + fp))
+  }
+}
+
+recall <- function(actual, predicted, positive_label) {
+  tp <- sum(predicted == positive_label & actual == positive_label)
+  fn <- sum(predicted != positive_label & actual == positive_label)
+  if (tp + fn == 0) {
+    return(0)  # Handling division by zero
+  } else {
+    return(tp / (tp + fn))
+  }
+}
+
+f1_score <- function(actual, predicted, positive_label) {
+  prec <- precision(actual, predicted, positive_label)
+  rec <- recall(actual, predicted, positive_label)
+  if (prec + rec == 0) {
+    return(0)  # Handling division by zero
+  } else {
+    return(2 * (prec * rec) / (prec + rec))
+  }
+}
+
+micro_f1_score <- function(actual, predicted) {
+  precisions <- recall_values <- f1_scores <- numeric(length = length(unique(actual)))
+  for (i in seq_along(unique(actual))) {
+    label <- unique(actual)[i]
+    precisions[i] <- precision(actual, predicted, label)
+    recall_values[i] <- recall(actual, predicted, label)
+    f1_scores[i] <- f1_score(actual, predicted, label)
+  }
+  return(2 * mean(precisions) * mean(recall_values) / (mean(precisions) + mean(recall_values)))
+}
+
+micro_f1_ord <- micro_f1_score(lab, predicted_values_ord)
+micro_f1_mult <- micro_f1_score(lab, predicted_values_mult)
+
+micro_f1_ord
+micro_f1_mult
+
+#### modelling [0:60] ####
+modeldata <- data.frame(
+  lab = lab[0:60],
+  m = var1[0:60],
+  p = var2[0:60],
+  q = var3[0:60],
+  Rsq_exp_bm = Rsq_exp_bm[0:60],
+  Rsq_rett_bm = Rsq_rett_bm[0:60],
+  Rsq_ggm_bm = Rsq_ggm_bm[0:60],
+  naexp = naexp[0:60],
+  narett = narett[0:60],
+  naggm = naggm[0:60]
+)
+
+ord_model <- polr(lab ~ ., data=modeldata, Hess = TRUE)
+mult_model <- multinom(lab ~ ., data=modeldata, Hess = TRUE)
+
+summary(ord_model)
+summary(mult_model)
+
+predicted_values_ord <- predict(ord_model, newdata = predictors, type = "class")
+predicted_values_ord
+
+predicted_values_mult <- predict(mult_model, newdata = predictors, type = "class")
+predicted_values_mult
+
+sum(lab[0:60] == predicted_values_ord) / length(lab[0:60])
+sum(lab[0:60] == predicted_values_mult) / length(lab[0:60])
+
+
+table(lab[0:60],predicted_values_ord)
+table(lab[0:60],predicted_values_mult)
+
+
+micro_f1_ord <- micro_f1_score(lab[0:60], predicted_values_ord)
+micro_f1_mult <- micro_f1_score(lab[0:60], predicted_values_mult)
+
+micro_f1_ord
+micro_f1_mult
