@@ -76,7 +76,7 @@ lab <- as.factor(c(1,0,1,0,1,1,1,1,0,2,0,0,0,2,2,0,2,1,1,2,1,2,1,2,0,0,2,1,2,1,
 data
 str(data)
 
-title = "Counter-Strike 2"
+title = "Dota 2"
 dati = rev(data[title][[1]][!is.na(data[title][[1]])])
 dati
 length(dati)
@@ -446,14 +446,16 @@ modeldata <- data.frame(
 
 ord_model <- polr(lab ~ ., data=modeldata, Hess = TRUE)
 mult_model <- multinom(lab ~ ., data=modeldata, Hess = TRUE)
+logit_model <- glm(labnum ~ var1 + var2 + var3 + Rsq_exp_bm + Rsq_rett_bm + Rsq_ggm_bm + naexp + narett + naggm, family = binomial(link = "logit"))
 
 summary(ord_model)
 summary(mult_model)
+summary(logit_model)
 
-predicted_values_ord <- predict(ord_model, newdata = predictors, type = "class")
+predicted_values_ord <- predict(ord_model, newdata = modeldata, type = "class")
 predicted_values_ord
 
-predicted_values_mult <- predict(mult_model, newdata = predictors, type = "class")
+predicted_values_mult <- predict(mult_model, newdata = modeldata, type = "class")
 predicted_values_mult
 
 sum(lab[0:60] == predicted_values_ord) / length(lab[0:60])
