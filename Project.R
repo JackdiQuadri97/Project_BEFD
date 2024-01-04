@@ -757,3 +757,115 @@ knn_pred_min = as.factor(knn)
 table(test_labels, knn)
 
 micro_f1_knn <- micro_f1_score(test_labels, knn_pred_min)
+
+
+
+################### ucrcd #################
+
+errorucrcd <- function(x,y,bool){
+  result <- tryCatch({
+    return(UCRCD(x,y, display = bool))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+
+
+#manual
+title1 = colnames(data)[100]
+title1
+dati1 = rev(data[title1][[1]][!is.na(data[title1][[1]])])
+length(dati1)
+months1 = rev(data["Month"][[1]][!is.na(data[title1][[1]])])
+januarytf = grepl("January", months1)
+listjan = which(januarytf)
+
+title2 = colnames(data)[99]
+title2
+dati2 = rev(data[title2][[1]][!is.na(data[title2][[1]])])
+length(dati2)
+months2 = rev(data["Month"][[1]][!is.na(data[title2][[1]])])
+
+plot(dati1, xlab = "Year", ylab = "Average Players", pch = 16, lty = 3, xaxt = "n", cex = 0.6, col = 1)
+axis(1, at = listjan, labels = months1[januarytf])
+start_index_dati2 <- length(dati1) - length(dati2) + 1
+points(start_index_dati2:(start_index_dati2 + length(dati2) - 1), dati2, type = "b", pch = 2, lty = 3, cex = 0.7, col = 3)
+legend("topright", legend = c(title1, title2), pch = c(16, 2), col = c(1, 3))
+
+ucrcd = NULL
+ucrcd<- UCRCD(dati1,dati2,display=T) 
+summary(ucrcd)
+ucrcd$coefficients
+
+
+#batch all titles
+
+ucrcd_params <- tibble(
+  param = c("title1","title2","ma","p1a","q1a","mc","p1c","q1c+delta","q1c","p2","q2", "q2-gamma","rsq")
+)
+
+ucrcd_pvals <- tibble(
+  coeff = c("title1","title2","ma","p1a","q1a","mc","p1c","p2","q1c","q2", "delta","gamma")
+)
+
+i=1
+for (title1 in colnames(data)[-1]){
+  print(paste(i, (format(Sys.time(), "%Y-%m-%d %H:%M:%S")), sep= " "))
+  dati1 = rev(data[title1][[1]][!is.na(data[title1][[1]])])
+  months1 = rev(data["Month"][[1]][!is.na(data[title1][[1]])])
+  
+  for (title2 in colnames(data)[-1]){
+    if (title1 != title2){
+      dati2 = rev(data[title2][[1]][!is.na(data[title2][[1]])])
+      months2 = rev(data["Month"][[1]][!is.na(data[title2][[1]])])
+      
+      if (length(months1) > length(months2)){
+        ucrcd<- errorucrcd(dati1,dati2,F)
+        s = paste(title1,title2,sep=" ** ")
+        if (length(ucrcd)==1){
+          ucrcd_params[s] <- c(title1,title2,rep(NA,11))
+          ucrcd_pvals[s] <- c(title1,title2,rep(NA,10))
+        } else{
+          ucrcd_params[s] <- c(title1,title2,ucrcd$coefficients,ucrcd$Rsquared)
+          ucrcd_pvals[s] <- c(title1,title2,ucrcd$Estimate$`p-value`)
+        }
+      }
+    }
+  }
+  i = i+1
+} 
+
+ucrcd_params
+ucrcd_pvals
+
+v <- c(3,4,5,6,7,8,9,10,11,12)
+#function to check if every pvalue in column is significant
+f <- function(col){
+  result <- TRUE
+  
+  for (i in v){
+    if (is.na(as.numeric(col[i])) || as.numeric(col[i]) > 0.01){
+      result <- FALSE
+      return(result)
+    }
+  }
+  return(result)
+}
+
+#params with significant pvalues
+ucrdcd_params_significant <- tibble(
+  param = c("title1","title2","ma","p1a","q1a","mc","p1c","q1c+delta","q1c","p2","q2", "q2-gamma","rsq")
+)
+ucrcd_pvals_significant <- tibble(
+  coeff = c("title1","title2","ma","p1a","q1a","mc","p1c","p2","q1c","q2", "delta","gamma")
+)
+for (col in names(ucrcd_pvals)[-1]) {
+  column <- ucrcd_pvals[[col]]
+  if (f(column)){
+    ucrdcd_params_significant[col] = c(ucrcd_params[[col]])
+    ucrcd_pvals_significant[col] = c(ucrcd_pvals[[col]])
+  }
+}
+ucrdcd_params_significant
+ucrcd_pvals_significant
