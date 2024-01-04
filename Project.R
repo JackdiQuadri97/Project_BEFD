@@ -10,6 +10,8 @@ library(plotly)
 library(MASS)
 library(nnet)
 library(tibble)
+library(class)
+library(caret)
 
 ####function to get ggm catching errors####
 errorggm <- function(x){
@@ -643,6 +645,41 @@ micro_f1_mult <- micro_f1_score(lab, predicted_values_mult)
 micro_f1_ord
 micro_f1_mult
 
+
+# KNN
+
+train = length(modeldata$lab)*0.7
+
+train_labels <- modeldata$lab[0:train]
+train_predictors <- modeldata[0:train, -1]  # Excluding the label column
+
+test_labels <- modeldata$lab[train:length(modeldata$lab)]
+test_predictors <- modeldata[train:length(modeldata$lab), -1]  # Excluding the label column
+
+kmax = 100
+
+test_error = numeric(kmax)
+
+for (k in 1:kmax) {
+  knn_pred = as.factor(knn(train = train_predictors, test = test_predictors,
+                           cl = train_labels, k = k))
+  cm = confusionMatrix(data = knn_pred, reference = test_labels)
+  test_error[k] = 1 - cm$overall[1]
+}
+
+
+k_min = which.min(test_error)
+k_min
+
+knn = knn(train = train_predictors, test = test_predictors,
+          cl = train_labels, k = k_min)
+
+knn_pred_min = as.factor(knn)
+
+table(test_labels, knn)
+
+micro_f1_knn <- micro_f1_score(test_labels, knn_pred_min)
+
 #### modelling [0:60] ####
 modeldata <- data.frame(
   lab = lab[0:60],
@@ -660,6 +697,7 @@ modeldata <- data.frame(
 ord_model <- polr(lab ~ ., data=modeldata, Hess = TRUE)
 mult_model <- multinom(lab ~ ., data=modeldata, Hess = TRUE)
 logit_model <- glm(labnum ~ var1 + var2 + var3 + Rsq_exp_bm + Rsq_rett_bm + Rsq_ggm_bm + naexp + narett + naggm, family = binomial(link = "logit"))
+
 
 summary(ord_model)
 summary(mult_model)
@@ -684,3 +722,38 @@ micro_f1_mult <- micro_f1_score(lab[0:60], predicted_values_mult)
 
 micro_f1_ord
 micro_f1_mult
+
+
+# KNN
+
+train = length(modeldata$lab)*0.7
+
+train_labels <- modeldata$lab[0:train]
+train_predictors <- modeldata[0:train, -1]  # Excluding the label column
+
+test_labels <- modeldata$lab[train:length(modeldata$lab)]
+test_predictors <- modeldata[train:length(modeldata$lab), -1]  # Excluding the label column
+
+kmax = 100
+
+test_error = numeric(kmax)
+
+for (k in 1:kmax) {
+  knn_pred = as.factor(knn(train = train_predictors, test = test_predictors,
+                           cl = train_labels, k = k))
+  cm = confusionMatrix(data = knn_pred, reference = test_labels)
+  test_error[k] = 1 - cm$overall[1]
+}
+
+
+k_min = which.min(test_error)
+k_min
+
+knn = knn(train = train_predictors, test = test_predictors,
+          cl = train_labels, k = k_min)
+
+knn_pred_min = as.factor(knn)
+
+table(test_labels, knn)
+
+micro_f1_knn <- micro_f1_score(test_labels, knn_pred_min)
