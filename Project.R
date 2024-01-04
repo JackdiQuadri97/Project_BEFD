@@ -9,6 +9,7 @@ library(fpp2)
 library(plotly)
 library(MASS)
 library(nnet)
+library(tibble)
 
 ####function to get ggm catching errors####
 errorggm <- function(x){
@@ -55,7 +56,7 @@ data_raw <- tibble()
 for (num in nums){
   extr <- read_html(paste("https://steamcharts.com/app/",num, sep=""))
   nameextr <- extr %>% html_element("#app-title") %>% html_text()
-  dataextr <- extr %>% html_elements("body") %>% html_table() %>%  .[[1]] %>% select(c('Month','Avg. Players'))
+  dataextr <- extr %>% html_elements("body") %>% html_table() %>%  .[[1]] %>% dplyr::select(c('Month','Avg. Players'))
   
   if (nrow(dataextr) > 12){
     if (nrow(data_raw) == 0){
@@ -94,6 +95,24 @@ axis(1, at=listjan, labels=months[januarytf])
 
 bm_data<-BM(dati,display = T)
 summary(bm_data)
+
+
+# Mixed
+
+errormixedauto <- function(x, x_bm_data, a1, b1, c1, a2, b2, c2, display=F){
+  result <- tryCatch({
+    return(GBM(x, shock="mixed", nshock = 2, prelimestimates = c(x_bm_data$coefficients, a1, b1, c1, a2, b2, c2), display=display))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+
+
+
+
+##########################################
+
 
 gbm_data_1<-GBM(dati,shock="exp", nshock=1,
               prelimestimates=c(bm_data$coefficients,
@@ -218,14 +237,174 @@ for (title in colnames(data)[-1]){
   }
 }
 
+
+## Automatic identification of GBM
+
+# Exponential shock
+
+errorexpauto <- function(x, x_bm_data, display=F, k, mem, int){
+  result <- tryCatch({
+    return(GBM(x,shock="exp", nshock = 1, 
+               prelimestimates = c(x_bm_data$coefficients, k, mem, int),
+               display=display))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+
+memory = c(1, 0.5, 0.1, -0.1, -0.5, -1, -2)
+
+intensity = c(-2, -1, 1, 2)
+
+coeff_exp_auto <- tibble(
+  coeff = c("m", "p", "q", "a1", "b1", "c1")
+)
+
+preliminary_est_esp <- tibble(
+  coeff = c("m", "p", "q", "a1", "b1", "c1")
+)
+
+max_Rsq_exp_auto = rep(0, length(colnames(data)[-1]))
+Rsq_exp_auto = rep(0, length(colnames(data)[-1]))
+
+index = 1
+for (title in colnames(data)[-1]){
+  dati = rev(data[title][[1]][!is.na(data[title][[1]])])
+  
+  indeces = seq(from = 1, to = length(dati), by = round(length(dati)/10, 0))
+  for (idx in indeces) {
+    for (i in intensity) {
+      for (m in memory) {
+        model = errorexpauto(dati, bm_data, display=F, idx, m, i)
+        if(length(model) != 1) {
+          Rsq_exp_auto[index] = model$Rsquared
+          if(Rsq_exp_auto[index] > max_Rsq_exp_auto[index]) {
+            max_Rsq_exp_auto[index] = Rsq_exp_auto[index]
+            coeff_exp_auto[index] = model$coefficients
+            preliminary_est_esp[index] = c(bm_data$coefficients, idx, m, i)
+          }
+        }
+      }
+    }
+  }
+  print(index)
+  index = index + 1
+}
+
+max_Rsq_exp_auto
+coeff_exp_auto
+preliminary_est_esp
+
+# number of models that had a significant improvement in the Rsq
+sum(((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # automatic 
+sum(na.omit((Rsq_exp - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # fixed
+
+# Most improved Rsq
+
+imp_exp = which.max(((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm)))
+
+title_imp_exp = colnames(data)[imp_exp]
+title_imp_exp
+dati_imp_exp = rev(data[title_imp_exp][[1]][!is.na(data[title_imp_exp][[1]])])
+
+BM(dati_imp_exp, display=T)
+
+GBM(dati_imp_exp, shock="exp", nshock = 1, 
+    prelimestimates = preliminary_est_esp[imp_exp] %>% deframe,
+    display=T)
+
+
+# Rectangular shock
+
+errorrettauto <- function(x, x_bm_data, display=F, start, end, int){
+  result <- tryCatch({
+    return(GBM(x, shock="rett", nshock = 1, 
+               prelimestimates = c(x_bm_data$coefficients, start, end, int),
+               display=display))
+  }, error = function(e){
+    return(NA)
+  })
+  return(result)
+}
+
+
+start = c(1, round(length(dati)/10, 0) ,round(length(dati) * (2/10), 0), round(length(dati) * (3/10), 0), round(length(dati) * (4/10), 0), round(length(dati) * (5/10), 0), round(length(dati) * (6/10), 0), round(length(dati) * (7/10), 0), round(length(dati) * (8/10), 0), round(length(dati) * (9/10), 0))
+end = c(round(length(dati)/10, 0) ,round(length(dati) * (2/10), 0), round(length(dati) * (3/10), 0), round(length(dati) * (4/10), 0), round(length(dati) * (5/10), 0), round(length(dati) * (6/10), 0), round(length(dati) * (7/10), 0), round(length(dati) * (8/10), 0), round(length(dati) * (9/10), 0), length(dati))
+
+coeff_rett_auto <- tibble(
+  coeff = c("m", "p", "q", "a1", "b1", "c1")
+)
+
+
+preliminary_est_rett <- tibble(
+  coeff = c("m", "p", "q", "a1", "b1", "c1")
+)
+
+max_Rsq_rett_auto = rep(0, length(colnames(data)[-1]))
+Rsq_rett_auto = rep(0, length(colnames(data)[-1]))
+
+index = 1
+for (title in colnames(data)[-1]) {
+  dati = rev(data[title][[1]][!is.na(data[title][[1]])])
+  
+  for (i in intensity) {
+    for (j in 1:10) {
+      s = start[j]
+      e = end[j]
+      model = errorrettauto(dati, bm_data, display=F, s, e, i)
+      if(length(model) != 1) {
+        Rsq_rett_auto[index] = model$Rsquared
+        if(Rsq_rett_auto[index] > max_Rsq_rett_auto[index]) {
+          max_Rsq_rett_auto[index] = Rsq_rett_auto[index]
+          coeff_rett_auto[index] = model$coefficients
+          preliminary_est_rett[index] = c(bm_data$coefficients, s, e, i)
+        }
+      }
+    }
+  }
+  print(index)
+  index = index + 1
+}
+
+Rsq_rett_auto
+coeff_rett_auto
+preliminary_est_rett
+
+# number of models that had a significant improvement in the Rsq
+sum(((max_Rsq_rett_auto - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # automatic 
+sum(na.omit((Rsq_rett - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # fixed
+
+# Most improved Rsq
+
+imp_rett = which.max(((max_Rsq_rett_auto - Rsq_bm) / (1 - Rsq_bm)))
+
+title_imp_rett = colnames(data)[imp_rett]
+title_imp_rett
+dati_imp_rett = rev(data[title_imp_rett][[1]][!is.na(data[title_imp_rett][[1]])])
+
+BM(dati_imp_rett, display=T)
+
+GBM(dati_imp_rett, shock="rett", nshock = 1, 
+    prelimestimates = preliminary_est_rett[max_imp_rett] %>% deframe,
+    display=T)
+
+
+#########################################################
+
+
 Rsq_bm
 Rsq_exp
 Rsq_rett
 Rsq_ggm
+Rsq_exp_auto
+Rsq_rett_auto
 coeffs_bm
 coeffs_exp
 coeffs_rett
 coeffs_ggm
+coeff_exp_auto
+coeff_rett_auto
 pvals_bm
 pvals_exp
 pvals_rett
@@ -233,9 +412,9 @@ pvals_ggm
 
 colnames(coeffs_bm)[-1]
 
-Rsq_exp_bm <- na.fill((1-Rsq_bm)/(1-Rsq_exp),1)
-Rsq_rett_bm <- na.fill((1-Rsq_bm)/(1-Rsq_rett),1)
-Rsq_ggm_bm <- na.fill((1-Rsq_bm)/(1-Rsq_ggm),1)
+Rsq_exp_bm <- na.fill((1-Rsq_bm)/(1-Rsq_exp), 1)
+Rsq_rett_bm <- na.fill((1-Rsq_bm)/(1-Rsq_rett), 1)
+Rsq_ggm_bm <- na.fill((1-Rsq_bm)/(1-Rsq_ggm), 1)
 
 plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, z = Rsq_ggm_bm, color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
@@ -243,6 +422,7 @@ plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, z = Rsq_ggm_bm, color = lab,
   layout(scene = list(xaxis = list(title = "exp"),
                       yaxis = list(title = "rett"),
                       zaxis = list(title = "ggm")))
+
 plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), z = log(Rsq_ggm_bm), color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
@@ -255,6 +435,30 @@ plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), color = lab,
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "log(exp)"),
                       yaxis = list(title = "log(rett)")))
+
+# Plots auto Rsq
+
+plot_ly(x = Rsq_exp_auto, y = Rsq_rett_auto, z = Rsq_ggm_bm, color = lab,
+        type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "exp"),
+                      yaxis = list(title = "rett"),
+                      zaxis = list(title = "ggm")))
+
+plot_ly(x = log(Rsq_exp_auto), y = Rsq_rett_auto, z = log(Rsq_ggm_bm), color = lab,
+        type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "log(exp)"),
+                      yaxis = list(title = "log(rett)"),
+                      zaxis = list(title = "log(ggm)")))
+
+plot_ly(x = log(Rsq_exp_auto), y = Rsq_rett_auto, color = lab,
+        type = "scatter", text = colnames(coeffs_bm)[-1], mode = "markers",
+        marker = list(size = 5)) %>%
+  layout(scene = list(xaxis = list(title = "log(exp)"),
+                      yaxis = list(title = "log(rett)")))
+
+#########################
 
 
 unlist(coeffs_bm[2,-1])
@@ -283,15 +487,19 @@ plot_ly(x = unlist(coeffs_bm[2,-1]), y = unlist(coeffs_bm[3,-1]),
 plot_ly(y = unlist(coeffs_bm[2,-1]), x = lab, type = "box",
         text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
+
 plot_ly(y = log(unlist(coeffs_bm[2,-1])), x = lab, type = "box",
         text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
+
 plot_ly(y = unlist(coeffs_bm[3,-1]), x = lab, type = "box",
         text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
+
 plot_ly(y = unlist(coeffs_bm[1,-1]), x = lab, type = "box",
         text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
+
 plot_ly(y = log(unlist(coeffs_bm[1,-1])), x = lab, type = "box",
         text = colnames(coeffs_bm)[-1]) %>%
   layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
@@ -310,18 +518,23 @@ plot_ly(x = unlist(pvals_bm[2,-1]), y = unlist(pvals_bm[3,-1]),
 plot_ly(y = unlist(pvals_bm[2,-1]), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "P"), xaxis = list(title = "Groups"))
+
 plot_ly(y = log(unlist(pvals_bm[2,-1])), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(P)"), xaxis = list(title = "Groups"))
+
 plot_ly(y = unlist(pvals_bm[3,-1]), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "Q"), xaxis = list(title = "Groups"))
+
 plot_ly(y = log(unlist(pvals_bm[3,-1])), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(Q)"), xaxis = list(title = "Groups"))
+
 plot_ly(y = unlist(pvals_bm[1,-1]), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "M"), xaxis = list(title = "Groups"))
+
 plot_ly(y = log(unlist(pvals_bm[1,-1])), x = lab, type = "box",
         text = colnames(pvals_bm)[-1]) %>%
   layout(yaxis = list(title = "log(M)"), xaxis = list(title = "Groups"))
