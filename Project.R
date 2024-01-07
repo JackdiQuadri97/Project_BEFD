@@ -138,7 +138,7 @@ coefficients(GGM(dati,display = F))
 colnames(data)
 
 ####debug check single bm bgm ggm####
-z = 76
+z = 121
 
 z=z+1
 title = colnames(data)[z]
@@ -283,8 +283,8 @@ for (title in colnames(data)[-1]){
           Rsq_exp_auto[index] = model$Rsquared
           if(Rsq_exp_auto[index] > max_Rsq_exp_auto[index]) {
             max_Rsq_exp_auto[index] = Rsq_exp_auto[index]
-            coeff_exp_auto[index] = model$coefficients
-            preliminary_est_esp[index] = c(bm_data$coefficients, idx, m, i)
+            coeff_exp_auto[title] = model$coefficients
+            preliminary_est_esp[title] = c(bm_data$coefficients, idx, m, i)
           }
         }
       }
@@ -302,19 +302,31 @@ preliminary_est_esp
 sum(((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # automatic 
 sum(na.omit((Rsq_exp - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # fixed
 
-# Most improved Rsq
+((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm))
 
-imp_exp = which.max(((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm)))
+# 5 Most improved Rsq
 
-title_imp_exp = colnames(data)[imp_exp]
-title_imp_exp
-dati_imp_exp = rev(data[title_imp_exp][[1]][!is.na(data[title_imp_exp][[1]])])
-
-BM(dati_imp_exp, display=T)
-
-GBM(dati_imp_exp, shock="exp", nshock = 1, 
-    prelimestimates = preliminary_est_esp[imp_exp] %>% deframe,
-    display=T)
+top_imp_exp <- order(((max_Rsq_exp_auto - Rsq_bm) / (1 - Rsq_bm)), decreasing = TRUE)[1:5] + 1
+for (imp_exp in top_imp_exp){
+  title_imp_exp = colnames(data)[imp_exp]
+  print(title_imp_exp)
+  dati_imp_exp = rev(data[title_imp_exp][[1]][!is.na(data[title_imp_exp][[1]])])
+  
+  BM(dati_imp_exp, display=T)
+  
+  Sys.sleep(3)
+  
+  GBM(dati_imp_exp, shock="exp", nshock = 1, 
+      prelimestimates = preliminary_est_esp[imp_exp] %>% deframe,
+      display=T)
+  
+  summary(BM(dati_imp_exp, display=F))
+  
+  summary(GBM(dati_imp_exp, shock="exp", nshock = 1, 
+              prelimestimates = preliminary_est_esp[imp_exp] %>% deframe,
+              display=F))
+  Sys.sleep(5)
+}
 
 
 # Rectangular shock
@@ -359,17 +371,17 @@ for (title in colnames(data)[-1]) {
         Rsq_rett_auto[index] = model$Rsquared
         if(Rsq_rett_auto[index] > max_Rsq_rett_auto[index]) {
           max_Rsq_rett_auto[index] = Rsq_rett_auto[index]
-          coeff_rett_auto[index] = model$coefficients
-          preliminary_est_rett[index] = c(bm_data$coefficients, s, e, i)
+          coeff_rett_auto[title] = model$coefficients
+          preliminary_est_rett[title] = c(bm_data$coefficients, s, e, i)
         }
       }
     }
   }
   print(index)
-  index = index + 1
+  index <- index + 1
 }
 
-Rsq_rett_auto
+max_Rsq_rett_auto
 coeff_rett_auto
 preliminary_est_rett
 
@@ -377,19 +389,24 @@ preliminary_est_rett
 sum(((max_Rsq_rett_auto - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # automatic 
 sum(na.omit((Rsq_rett - Rsq_bm) / (1 - Rsq_bm)) > 0.3) # fixed
 
-# Most improved Rsq
+# 5 Most improved Rsq
 
-imp_rett = which.max(((max_Rsq_rett_auto - Rsq_bm) / (1 - Rsq_bm)))
+top_imp_rett <- order(((max_Rsq_rett_auto - Rsq_bm) / (1 - Rsq_bm)), decreasing = TRUE)[1:5] + 1
+for (imp_rett in top_imp_rett){
+  title_imp_rett = colnames(data)[imp_rett]
+  print(title_imp_rett)
+  dati_imp_rett = rev(data[title_imp_rett][[1]][!is.na(data[title_imp_rett][[1]])])
+  
+  summary(BM(dati_imp_rett, display=T))
+  
+  Sys.sleep(3)
+  
+  summary(GBM(dati_imp_rett, shock="rett", nshock = 1, 
+              prelimestimates = preliminary_est_rett[imp_rett] %>% deframe,
+              display=T))
+  Sys.sleep(5)
+}
 
-title_imp_rett = colnames(data)[imp_rett]
-title_imp_rett
-dati_imp_rett = rev(data[title_imp_rett][[1]][!is.na(data[title_imp_rett][[1]])])
-
-BM(dati_imp_rett, display=T)
-
-GBM(dati_imp_rett, shock="rett", nshock = 1, 
-    prelimestimates = preliminary_est_rett[max_imp_rett] %>% deframe,
-    display=T)
 
 
 #########################################################
@@ -412,11 +429,21 @@ pvals_exp
 pvals_rett
 pvals_ggm
 
+
+
 colnames(coeffs_bm)[-1]
 
-Rsq_exp_bm <- na.fill((1-Rsq_bm)/(1-Rsq_exp), 1)
-Rsq_rett_bm <- na.fill((1-Rsq_bm)/(1-Rsq_rett), 1)
-Rsq_ggm_bm <- na.fill((1-Rsq_bm)/(1-Rsq_ggm), 1)
+Rsq_exp_bm <- na.fill((Rsq_exp-Rsq_bm)/(1-Rsq_bm), 0)
+Rsq_rett_bm <- na.fill((Rsq_rett-Rsq_bm)/(1-Rsq_bm), 0)
+Rsq_ggm_bm <- na.fill((Rsq_ggm-Rsq_bm)/(1-Rsq_bm), 0)
+Rsq_exp_bm[Rsq_exp_bm < 0] <- 0
+Rsq_rett_bm[Rsq_rett_bm < 0] <- 0
+Rsq_ggm_bm[Rsq_ggm_bm < 0] <- 0
+
+Rsq_exp_auto_bm <- ((max_Rsq_exp_auto-Rsq_bm)/(1-Rsq_bm))
+Rsq_rett_auto_bm <- ((max_Rsq_rett_auto-Rsq_bm)/(1-Rsq_bm))
+Rsq_exp_auto_bm[Rsq_exp_auto_bm < 0] <- 0
+Rsq_rett_auto_bm[Rsq_rett_auto_bm < 0] <- 0
 
 plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, z = Rsq_ggm_bm, color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
@@ -425,40 +452,40 @@ plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, z = Rsq_ggm_bm, color = lab,
                       yaxis = list(title = "rett"),
                       zaxis = list(title = "ggm")))
 
-plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), z = log(Rsq_ggm_bm), color = lab,
+plot_ly(x = log(Rsq_exp_bm+0.001), y = log(Rsq_rett_bm+0.001), z = log(Rsq_ggm_bm+0.001), color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "log(exp)"),
                       yaxis = list(title = "log(rett)"),
                       zaxis = list(title = "log(ggm)")))
 
-plot_ly(x = log(Rsq_exp_bm), y = log(Rsq_rett_bm), color = lab,
+plot_ly(x = Rsq_exp_bm, y = Rsq_rett_bm, color = lab,
         type = "scatter", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
-  layout(scene = list(xaxis = list(title = "log(exp)"),
-                      yaxis = list(title = "log(rett)")))
+  layout(scene = list(xaxis = list(title = "exp"),
+                      yaxis = list(title = "rett")))
 
 # Plots auto Rsq
 
-plot_ly(x = Rsq_exp_auto, y = Rsq_rett_auto, z = Rsq_ggm_bm, color = lab,
+plot_ly(x = Rsq_exp_auto_bm, y = Rsq_rett_auto_bm, z = Rsq_ggm_bm, color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "exp"),
                       yaxis = list(title = "rett"),
                       zaxis = list(title = "ggm")))
 
-plot_ly(x = log(Rsq_exp_auto), y = Rsq_rett_auto, z = log(Rsq_ggm_bm), color = lab,
+plot_ly(x = log(Rsq_exp_auto_bm+0.001), y = log(Rsq_rett_auto_bm+0.001), z = log(Rsq_ggm_bm+0.001), color = lab,
         type = "scatter3d", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
   layout(scene = list(xaxis = list(title = "log(exp)"),
                       yaxis = list(title = "log(rett)"),
                       zaxis = list(title = "log(ggm)")))
 
-plot_ly(x = log(Rsq_exp_auto), y = Rsq_rett_auto, color = lab,
+plot_ly(x = Rsq_exp_auto_bm, y = Rsq_rett_auto_bm, color = lab,
         type = "scatter", text = colnames(coeffs_bm)[-1], mode = "markers",
         marker = list(size = 5)) %>%
-  layout(scene = list(xaxis = list(title = "log(exp)"),
-                      yaxis = list(title = "log(rett)")))
+  layout(scene = list(xaxis = list(title = "exp"),
+                      yaxis = list(title = "rett")))
 
 #########################
 
@@ -550,7 +577,7 @@ plot_ly(y = log(unlist(pvals_bm[1,-1])), x = lab, type = "box",
 addmargins(table(lab,is.na(unlist(pvals_ggm[1,-1]))))
 
 
-#### modelling ####
+#### modeling without auto ####
 labnum <- (as.numeric(lab)-1)/2
 
 var1 <- normalize_z_score(log(unlist(coeffs_bm[1,-1])))
@@ -648,15 +675,17 @@ micro_f1_mult
 
 # KNN
 
-train = length(modeldata$lab)*0.7
+num_train = round(length(modeldata$lab)*0.7)
+set.seed(42)
+train_sample = sample(c(rep(TRUE, num_train), rep(FALSE, length(modeldata$lab) - num_train)))
 
-train_labels <- modeldata$lab[0:train]
-train_predictors <- modeldata[0:train, -1]  # Excluding the label column
+train_labels <- modeldata$lab[train_sample]
+train_predictors <- modeldata[train_sample, -1]  # Excluding the label column
 
-test_labels <- modeldata$lab[train:length(modeldata$lab)]
-test_predictors <- modeldata[train:length(modeldata$lab), -1]  # Excluding the label column
+test_labels <- modeldata$lab[!train_sample]
+test_predictors <- modeldata[!train_sample, -1]  # Excluding the label column
 
-kmax = 100
+kmax = min(100,num_train)
 
 test_error = numeric(kmax)
 
@@ -667,9 +696,13 @@ for (k in 1:kmax) {
   test_error[k] = 1 - cm$overall[1]
 }
 
+test_error
 
 k_min = which.min(test_error)
 k_min
+k_min=3
+k_min
+
 
 knn = knn(train = train_predictors, test = test_predictors,
           cl = train_labels, k = k_min)
@@ -679,6 +712,7 @@ knn_pred_min = as.factor(knn)
 table(test_labels, knn)
 
 micro_f1_knn <- micro_f1_score(test_labels, knn_pred_min)
+micro_f1_knn
 
 #### modelling [0:60] ####
 modeldata <- data.frame(
@@ -726,15 +760,17 @@ micro_f1_mult
 
 # KNN
 
-train = length(modeldata$lab)*0.7
+num_train = round(length(modeldata$lab)*0.7)
+set.seed(42)
+train_sample = sample(c(rep(TRUE, num_train), rep(FALSE, length(modeldata$lab) - num_train)))
 
-train_labels <- modeldata$lab[0:train]
-train_predictors <- modeldata[0:train, -1]  # Excluding the label column
+train_labels <- modeldata$lab[train_sample]
+train_predictors <- modeldata[train_sample, -1]  # Excluding the label column
 
-test_labels <- modeldata$lab[train:length(modeldata$lab)]
-test_predictors <- modeldata[train:length(modeldata$lab), -1]  # Excluding the label column
+test_labels <- modeldata$lab[!train_sample]
+test_predictors <- modeldata[!train_sample, -1]  # Excluding the label column
 
-kmax = 100
+kmax = min(100,num_train)
 
 test_error = numeric(kmax)
 
@@ -745,9 +781,13 @@ for (k in 1:kmax) {
   test_error[k] = 1 - cm$overall[1]
 }
 
+test_error
 
 k_min = which.min(test_error)
 k_min
+#k_min=3
+#k_min
+
 
 knn = knn(train = train_predictors, test = test_predictors,
           cl = train_labels, k = k_min)
@@ -757,8 +797,168 @@ knn_pred_min = as.factor(knn)
 table(test_labels, knn)
 
 micro_f1_knn <- micro_f1_score(test_labels, knn_pred_min)
+micro_f1_knn
 
 
+#### modeling with auto ####
+# using exp and rett auto
+labnum <- (as.numeric(lab)-1)/2
+
+modeldata <- data.frame(
+  lab = lab,
+  m_exp = normalize_z_score(log(unlist(coeff_exp_auto[1,-1]))),
+  p_exp = normalize_z_score(unlist(coeff_exp_auto[2,-1])),
+  q_exp = normalize_z_score(unlist(coeff_exp_auto[3,-1])),
+  a1_exp = normalize_z_score(unlist(coeff_exp_auto[4,-1])),
+  b1_exp = normalize_z_score(unlist(coeff_exp_auto[5,-1])),
+  c1_exp = normalize_z_score(unlist(coeff_exp_auto[6,-1])),
+  m_rett = normalize_z_score(log(unlist(coeff_rett_auto[1,-1]))),
+  p_rett = normalize_z_score(unlist(coeff_rett_auto[2,-1])),
+  q_rett = normalize_z_score(unlist(coeff_rett_auto[3,-1])),
+  a1_rett = normalize_z_score(unlist(coeff_rett_auto[4,-1])),
+  b1_rett = normalize_z_score(unlist(coeff_rett_auto[5,-1])),
+  c1_rett = normalize_z_score(unlist(coeff_rett_auto[6,-1])),
+  max_Rsq_exp_auto = max_Rsq_exp_auto,
+  max_Rsq_rett_auto = max_Rsq_rett_auto
+)
+
+ord_model <- polr(lab ~ ., data = modeldata, Hess = TRUE)
+mult_model <- multinom(lab ~ ., data = modeldata, Hess = TRUE)
+
+summary(ord_model)
+summary(mult_model)
+
+predicted_values_ord <- predict(ord_model, newdata = modeldata[-1], type = "class")
+predicted_values_ord
+
+predicted_values_mult <- predict(mult_model, newdata = modeldata[-1], type = "class")
+predicted_values_mult
+
+sum(lab == predicted_values_ord) / length(lab)
+sum(lab == predicted_values_mult) / length(lab)
+
+
+table(lab,predicted_values_ord)
+table(lab,predicted_values_mult)
+
+
+micro_f1_ord <- micro_f1_score(lab, predicted_values_ord)
+micro_f1_mult <- micro_f1_score(lab, predicted_values_mult)
+
+micro_f1_ord
+micro_f1_mult
+
+#stepwise selection on multinomial
+
+modeldata <- data.frame(
+  lab = lab,
+  m_exp = normalize_z_score(log(unlist(coeff_exp_auto[1,-1]))),
+  p_exp = normalize_z_score(unlist(coeff_exp_auto[2,-1])),
+  q_exp = normalize_z_score(unlist(coeff_exp_auto[3,-1])),
+  a1_exp = normalize_z_score(unlist(coeff_exp_auto[4,-1])),
+  b1_exp = normalize_z_score(unlist(coeff_exp_auto[5,-1])),
+  c1_exp = normalize_z_score(unlist(coeff_exp_auto[6,-1])),
+  m_rett = normalize_z_score(log(unlist(coeff_rett_auto[1,-1]))),
+  p_rett = normalize_z_score(unlist(coeff_rett_auto[2,-1])),
+  q_rett = normalize_z_score(unlist(coeff_rett_auto[3,-1])),
+  a1_rett = normalize_z_score(unlist(coeff_rett_auto[4,-1])),
+  b1_rett = normalize_z_score(unlist(coeff_rett_auto[5,-1])),
+  c1_rett = normalize_z_score(unlist(coeff_rett_auto[6,-1])),
+  max_Rsq_exp_auto = max_Rsq_exp_auto,
+  max_Rsq_rett_auto = max_Rsq_rett_auto
+)
+
+mult_model_step <- multinom(lab ~ ., data = modeldata, Hess = TRUE)  %>% stepAIC(trace = FALSE)
+
+summary(mult_model_step)
+summary(mult_model)
+
+modeldata_step <- data.frame(
+  lab = lab,
+  m_exp = normalize_z_score(log(unlist(coeff_exp_auto[1,-1]))),
+  p_exp = normalize_z_score(unlist(coeff_exp_auto[2,-1])),
+  #q_exp = normalize_z_score(unlist(coeff_exp_auto[3,-1])),
+  #a1_exp = normalize_z_score(unlist(coeff_exp_auto[4,-1])),
+  b1_exp = normalize_z_score(unlist(coeff_exp_auto[5,-1])),
+  #c1_exp = normalize_z_score(unlist(coeff_exp_auto[6,-1])),
+  m_rett = normalize_z_score(log(unlist(coeff_rett_auto[1,-1]))),
+  #p_rett = normalize_z_score(unlist(coeff_rett_auto[2,-1])),
+  q_rett = normalize_z_score(unlist(coeff_rett_auto[3,-1])),
+  #a1_rett = normalize_z_score(unlist(coeff_rett_auto[4,-1])),
+  b1_rett = normalize_z_score(unlist(coeff_rett_auto[5,-1])),
+  c1_rett = normalize_z_score(unlist(coeff_rett_auto[6,-1])),
+  max_Rsq_exp_auto = max_Rsq_exp_auto
+  #max_Rsq_rett_auto = max_Rsq_rett_auto
+)
+
+predicted_values_mult_step <- predict(mult_model_step, newdata = modeldata[-1], type = "class")
+predicted_values_mult_step
+
+sum(lab == predicted_values_mult_step) / length(lab)
+
+
+table(lab,predicted_values_mult_step)
+
+
+micro_f1_mult_step <- micro_f1_score(lab, predicted_values_mult_step)
+
+micro_f1_mult_step
+
+#stepwise limited to 60 labels
+
+modeldata <- data.frame(
+  lab = lab[0:60],
+  m_exp = normalize_z_score(log(unlist(coeff_exp_auto[1,-1])))[0:60],
+  p_exp = normalize_z_score(unlist(coeff_exp_auto[2,-1]))[0:60],
+  q_exp = normalize_z_score(unlist(coeff_exp_auto[3,-1]))[0:60],
+  a1_exp = normalize_z_score(unlist(coeff_exp_auto[4,-1]))[0:60],
+  b1_exp = normalize_z_score(unlist(coeff_exp_auto[5,-1]))[0:60],
+  c1_exp = normalize_z_score(unlist(coeff_exp_auto[6,-1]))[0:60],
+  m_rett = normalize_z_score(log(unlist(coeff_rett_auto[1,-1])))[0:60],
+  p_rett = normalize_z_score(unlist(coeff_rett_auto[2,-1]))[0:60],
+  q_rett = normalize_z_score(unlist(coeff_rett_auto[3,-1]))[0:60],
+  a1_rett = normalize_z_score(unlist(coeff_rett_auto[4,-1]))[0:60],
+  b1_rett = normalize_z_score(unlist(coeff_rett_auto[5,-1]))[0:60],
+  c1_rett = normalize_z_score(unlist(coeff_rett_auto[6,-1]))[0:60],
+  max_Rsq_exp_auto = max_Rsq_exp_auto[0:60],
+  max_Rsq_rett_auto = max_Rsq_rett_auto[0:60]
+)
+
+mult_model_step <- multinom(lab ~ ., data = modeldata, Hess = TRUE)  %>% stepAIC(trace = FALSE)
+
+summary(mult_model_step)
+summary(mult_model)
+
+modeldata <- data.frame(
+  lab = lab[0:60],
+  m_exp = normalize_z_score(log(unlist(coeff_exp_auto[1,-1])))[0:60],
+  p_exp = normalize_z_score(unlist(coeff_exp_auto[2,-1]))[0:60],
+  q_exp = normalize_z_score(unlist(coeff_exp_auto[3,-1]))[0:60],
+  #a1_exp = normalize_z_score(unlist(coeff_exp_auto[4,-1]))[0:60],
+  b1_exp = normalize_z_score(unlist(coeff_exp_auto[5,-1]))[0:60],
+  c1_exp = normalize_z_score(unlist(coeff_exp_auto[6,-1]))[0:60],
+  m_rett = normalize_z_score(log(unlist(coeff_rett_auto[1,-1])))[0:60],
+  #p_rett = normalize_z_score(unlist(coeff_rett_auto[2,-1]))[0:60],
+  q_rett = normalize_z_score(unlist(coeff_rett_auto[3,-1]))[0:60],
+  #a1_rett = normalize_z_score(unlist(coeff_rett_auto[4,-1]))[0:60],
+  b1_rett = normalize_z_score(unlist(coeff_rett_auto[5,-1]))[0:60]
+  #c1_rett = normalize_z_score(unlist(coeff_rett_auto[6,-1]))[0:60],
+  #max_Rsq_exp_auto = max_Rsq_exp_auto[0:60],
+  #max_Rsq_rett_auto = max_Rsq_rett_auto[0:60]
+)
+
+predicted_values_mult_step <- predict(mult_model_step, newdata = modeldata[-1], type = "class")
+predicted_values_mult_step
+
+sum(lab[0:60] == predicted_values_mult_step) / length(lab[0:60])
+
+
+table(lab[0:60],predicted_values_mult_step)
+
+
+micro_f1_mult_step <- micro_f1_score(lab[0:60], predicted_values_mult_step)
+
+micro_f1_mult_step
 
 ################### ucrcd #################
 
@@ -869,3 +1069,18 @@ for (col in names(ucrcd_pvals)[-1]) {
 }
 ucrdcd_params_significant
 ucrcd_pvals_significant
+
+unlist(ucrcd_pvals_significant[1,-1])
+unlist(ucrcd_pvals_significant[2,-1])
+
+#plot models that have significant pvalues
+for (col in names(ucrdcd_params_significant)[-1]) {
+  title1 <- unlist(ucrdcd_params_significant[1,col])
+  title2 <- unlist(ucrdcd_params_significant[2,col])
+  dati1 = rev(data[title1][[1]][!is.na(data[title1][[1]])])
+  dati2 = rev(data[title2][[1]][!is.na(data[title2][[1]])])
+  UCRCD(dati1,dati2, display = T)
+  print(title1)
+  print(title2)
+  Sys.sleep(10)
+}
